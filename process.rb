@@ -29,7 +29,7 @@ pdf_urls.each do |url|
       elsif (x = line.match(/\s*(?<name>.*?)\s+(?<day>\w+\s+\d{1,2}),\s*\w+/))
         raise "Didn't receive year before seeing a holiday: #{line.strip.inspect} in #{path}" unless year
 
-        date = Time.parse("#{x['day']}, #{year} 00:00:00 #{utc_offset}")
+        date = Time.parse("#{x['day']}, #{year} 12:00:00 #{utc_offset}")
         sorter[date] << x['name']
       end
     end
