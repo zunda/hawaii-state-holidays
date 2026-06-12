@@ -43,5 +43,6 @@ sorter.keys.sort.each do |date|
   end
 end
 
-require 'pp'
-pp holidays
+holidays.each do |date, name|
+  warn "#{date.localtime.strftime('%Y-%m-%d %a')}: #{name}"
+end
