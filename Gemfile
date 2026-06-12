@@ -2,6 +2,5 @@
 
 source "https://rubygems.org"
 
-# gem "rails"
-
 gem "pdf-reader", "~> 2.15"
+gem "nokogiri", "~> 1.19"
