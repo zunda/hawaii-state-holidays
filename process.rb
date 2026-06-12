@@ -25,11 +25,21 @@ pdf_urls.each do |url|
   PDF::Reader.new(URI.parse(url).open).pages.each do |page|
     page.text.each_line do |line|
       if (x = line.match(/\s+(?<year>\d{4,4})\s+HAWAIʻI STATE HOLIDAYS/i))
-        year = x['year']
-      elsif (x = line.match(/\s*(?<name>.*?)\s+(?<day>\w+\s+\d{1,2}),\s*\w+/))
-        raise "Didn't receive year before seeing a holiday: #{line.strip.inspect} in #{path}" unless year
+        year = Integer(x['year'])
+      elsif (x = line.match(/\s*(?<name>.*?)\s+(?<day>\w+\s+\d{1,2}),\s*(?<dow>\w+)/))
+        raise "Didn't receive year before seeing a holiday: #{line.strip.inspect} in #{url}" unless year
 
-        date = Time.parse("#{x['day']}, #{year} 12:00:00 #{utc_offset}")
+        date = nil
+        [year, year - 1, year + 1].each do |y|
+          d = Time.parse("#{x['day']}, #{y} 12:00:00 #{utc_offset}")
+          dow = d.localtime.strftime('%A')
+          if dow == x['dow']
+            date = d
+            break
+          end
+        end
+        raise "Day of week doesn't match for years around #{year}: #{line.strip.inspect} in #{url}" unless date
+
         sorter[date] << x['name']
       end
     end
