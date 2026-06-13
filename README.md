@@ -8,6 +8,9 @@ Generates ics file for holidays listed in PDF files linked from a web page.
 1. Import `holidays.ics` to your calendar
 
 ## Changelog
+### v1.2 2026-06-12
+Avoid marking holidays busy
+
 ### v1.1 2026-06-12
 Use calendar year instead of actual date for unique ID
 

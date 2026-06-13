@@ -17,7 +17,7 @@ require 'time'
 require 'uuidtools'
 
 utc_offset = '-1000'
-VERSION = '1.1'
+VERSION = '1.2'
 
 read_local = false
 opts = OptionParser.new
@@ -95,6 +95,7 @@ holidays.each do |date, name, year|
     e.dtstart = Icalendar::Values::Date.new(ymd)
     e.dtend   = Icalendar::Values::Date.new(ymd)
     e.summary = name
+    e.transp  = 'TRANSPARENT'
   end
 end
 
