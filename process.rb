@@ -5,6 +5,7 @@
 # 1. Run `bnudle install`
 # 1. Run `bundle exec ruby process.rb https://dhrd.hawaii.gov/state-observed-holidays/`
 #
+require 'icalendar'
 require 'nokogiri'
 require 'open-uri'
 require 'optparse'
@@ -73,3 +74,15 @@ end
 holidays.each do |date, name|
   warn "#{date.localtime.strftime('%Y-%m-%d %a')}: #{name}"
 end
+
+cal = Icalendar::Calendar.new
+holidays.each do |date, name|
+  cal.event do |e|
+    ymd = date.localtime.strftime('%Y%m%d')
+    e.dtstart = Icalendar::Values::Date.new(ymd)
+    e.dtend   = Icalendar::Values::Date.new(ymd)
+    e.summary = name
+  end
+end
+
+puts cal.to_ical
