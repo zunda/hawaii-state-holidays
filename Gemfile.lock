@@ -40,6 +40,7 @@ GEM
     ruby-rc4 (0.1.5)
     ttfunk (1.8.0)
       bigdecimal (~> 3.1)
+    uuidtools (3.0.0)
 
 PLATFORMS
   aarch64-linux-gnu
@@ -55,6 +56,7 @@ DEPENDENCIES
   icalendar (~> 2.12)
   nokogiri (~> 1.19)
   pdf-reader (~> 2.15)
+  uuidtools (~> 3.0)
 
 CHECKSUMS
   Ascii85 (2.0.1) sha256=15cb5d941808543cbb9e7e6aea3c8ec3877f154c3461e8b3673e97f7ecedbe5a
@@ -78,6 +80,7 @@ CHECKSUMS
   racc (1.8.1) sha256=4a7f6929691dbec8b5209a0b373bc2614882b55fc5d2e447a21aaa691303d62f
   ruby-rc4 (0.1.5) sha256=00cc40a39d20b53f5459e7ea006a92cf584e9bc275e2a6f7aa1515510e896c03
   ttfunk (1.8.0) sha256=a7cbc7e489cc46e979dde04d34b5b9e4f5c8f1ee5fc6b1a7be39b829919d20ca
+  uuidtools (3.0.0) sha256=47a3d4d20e728f522c675be8bc4e001252db39864c97deb194dc543b153a4be8
 
 BUNDLED WITH
   4.0.10

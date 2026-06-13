@@ -11,6 +11,7 @@ require 'open-uri'
 require 'optparse'
 require 'pdf-reader'
 require 'time'
+require 'uuidtools'
 
 utc_offset = '-1000'
 
@@ -26,15 +27,17 @@ end
 opts.parse!(ARGV)
 
 if read_local
+  base_url = 'file:/'.dup
   pdf_urls = ARGV
 else
-  base_url = ARGV.shift
+  base_url = ARGV.shift.dup
   pdf_urls = Nokogiri::HTML(URI.parse(base_url).open)
                      .xpath('//a/@href')
                      .map(&:value)
                      .select { |url| url =~ /\.pdf\z/i }
                      .uniq
 end
+base_url += '/' unless base_url.end_with?('/')
 
 sorter = Hash.new { |h, k| h[k] = [] }
 pdf_urls.each do |url|
@@ -79,6 +82,8 @@ cal = Icalendar::Calendar.new
 holidays.each do |date, name|
   cal.event do |e|
     ymd = date.localtime.strftime('%Y%m%d')
+    url = "#{base_url}\##{ymd}/#{name}"
+    e.uid = UUIDTools::UUID.sha1_create(UUIDTools::UUID_URL_NAMESPACE, url).to_s
     e.dtstart = Icalendar::Values::Date.new(ymd)
     e.dtend   = Icalendar::Values::Date.new(ymd)
     e.summary = name
