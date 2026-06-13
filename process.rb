@@ -17,7 +17,7 @@ require 'time'
 require 'uuidtools'
 
 utc_offset = '-1000'
-VERSION = '1.0'
+VERSION = '1.1'
 
 read_local = false
 opts = OptionParser.new
@@ -69,7 +69,7 @@ pdf_urls.each do |url|
         end
         raise "Day of week doesn't match for years around #{year}: #{line.strip.inspect} in #{url}" unless date
 
-        sorter[date] << x['name']
+        sorter[date] << [x['name'], year]
       end
     end
   end
@@ -77,20 +77,20 @@ end
 
 holidays = []
 sorter.keys.sort.each do |date|
-  sorter[date].uniq.each do |name|
-    holidays << [date, name]
+  sorter[date].uniq.each do |name, year|
+    holidays << [date, name, year]
   end
 end
 
-holidays.each do |date, name|
+holidays.each do |date, name, _year|
   warn "#{date.localtime.strftime('%Y-%m-%d %a')}: #{name}"
 end
 
 cal = Icalendar::Calendar.new
-holidays.each do |date, name|
+holidays.each do |date, name, year|
   cal.event do |e|
     ymd = date.localtime.strftime('%Y%m%d')
-    url = "#{base_url}\##{ymd}/#{name}"
+    url = "#{base_url}\##{year}/#{name}"
     e.uid = UUIDTools::UUID.sha1_create(UUIDTools::UUID_URL_NAMESPACE, url).to_s
     e.dtstart = Icalendar::Values::Date.new(ymd)
     e.dtend   = Icalendar::Values::Date.new(ymd)
