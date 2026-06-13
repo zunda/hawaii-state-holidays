@@ -48,6 +48,7 @@ end
 base_url += '/' unless base_url.end_with?('/')
 
 sorter = Hash.new { |h, k| h[k] = [] }
+years = []
 pdf_urls.each do |url|
   year = nil
   src = read_local ? url : URI.parse(url).open
@@ -55,6 +56,7 @@ pdf_urls.each do |url|
     page.text.each_line do |line|
       if (x = line.match(/\s+(?<year>\d{4,4})\s+HAWAIʻI STATE HOLIDAYS/i))
         year = Integer(x['year'])
+        years << year
       elsif (x = line.match(/\s*(?<name>.*?)\s+(?<day>\w+\s+\d{1,2}),\s*(?<dow>\w+)/))
         raise "Didn't receive year before seeing a holiday: #{line.strip.inspect} in #{url}" unless year
 
@@ -74,6 +76,7 @@ pdf_urls.each do |url|
     end
   end
 end
+years.uniq!
 
 holidays = []
 sorter.keys.sort.each do |date|
@@ -85,6 +88,7 @@ end
 holidays.each do |date, name, _year|
   warn "#{date.localtime.strftime('%Y-%m-%d %a')}: #{name}"
 end
+warn "Found #{holidays.size} holidays over calendar years #{years.join(', ')}."
 
 cal = Icalendar::Calendar.new
 holidays.each do |date, name, year|
