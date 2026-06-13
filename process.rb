@@ -7,22 +7,39 @@
 #
 require 'nokogiri'
 require 'open-uri'
+require 'optparse'
 require 'pdf-reader'
 require 'time'
 
 utc_offset = '-1000'
 
-base_url = ARGV.shift
-pdf_urls = Nokogiri::HTML(URI.parse(base_url).open)
-                   .xpath('//a/@href')
-                   .map(&:value)
-                   .select { |url| url =~ /\.pdf\z/i }
-                   .uniq
+read_local = false
+opts = OptionParser.new
+opts.banner = <<~_
+  Usage: #{$PROGRAM_NAME} [options] URL
+  Reades holidays listed in PDF files linked from URL.
+_
+opts.on('-l', '--local', 'Reads local PDF files instead of a URL') do
+  read_local = true
+end
+opts.parse!(ARGV)
+
+if read_local
+  pdf_urls = ARGV
+else
+  base_url = ARGV.shift
+  pdf_urls = Nokogiri::HTML(URI.parse(base_url).open)
+                     .xpath('//a/@href')
+                     .map(&:value)
+                     .select { |url| url =~ /\.pdf\z/i }
+                     .uniq
+end
 
 sorter = Hash.new { |h, k| h[k] = [] }
 pdf_urls.each do |url|
   year = nil
-  PDF::Reader.new(URI.parse(url).open).pages.each do |page|
+  src = read_local ? url : URI.parse(url).open
+  PDF::Reader.new(src).pages.each do |page|
     page.text.each_line do |line|
       if (x = line.match(/\s+(?<year>\d{4,4})\s+HAWAIʻI STATE HOLIDAYS/i))
         year = Integer(x['year'])
