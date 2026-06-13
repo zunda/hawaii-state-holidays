@@ -17,6 +17,7 @@ require 'time'
 require 'uuidtools'
 
 utc_offset = '-1000'
+VERSION = '1.0'
 
 read_local = false
 opts = OptionParser.new
@@ -26,6 +27,10 @@ opts.banner = <<~_
 _
 opts.on('-l', '--local', 'Reads local PDF files instead of a URL') do
   read_local = true
+end
+opts.on_tail('--version', 'Show version') do
+  puts VERSION
+  exit
 end
 opts.parse!(ARGV)
 
