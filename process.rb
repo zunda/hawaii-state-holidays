@@ -16,8 +16,50 @@ require 'pdf-reader'
 require 'time'
 require 'uuidtools'
 
-utc_offset = '-1000'
 VERSION = '1.2'
+
+class HolidaySorterError < StandardError; end
+
+# Vefifies day of week and detects duplications
+class HolidaySorter
+  UTC_OFFSET = '-1000'
+
+  def initialize
+    @sorter = {}
+    @holidays = nil
+  end
+
+  def push(calendar_year, holiday_name, month_day, day_of_week)
+    date = matching_date(calendar_year, month_day, day_of_week)
+    raise HolidaySorterError, "Day of week doesn't match with years around #{calendar_year}" unless date
+
+    k = [calendar_year, holiday_name]
+    if !@sorter[k]
+      @sorter[k] = date
+      @holidays = nil
+    elsif @sorter[k] != date
+      raise HolidaySorterError, "Duplicate #{holiday_name} for #{calendar_year} with inconsistent date"
+    end
+  end
+
+  def holidays
+    @holidays ||= @sorter.to_a.map { |k, date| [*k, date] }
+  end
+
+  def matching_date(calendar_year, month_day, day_of_week)
+    date = nil
+    [calendar_year, calendar_year - 1, calendar_year + 1].each do |y|
+      d = Time.parse("#{month_day}, #{y} 12:00:00 #{UTC_OFFSET}")
+      if day_of_week == d.localtime.strftime('%A')
+        date = d
+        break
+      end
+    end
+    date
+  end
+
+  private :matching_date
+end
 
 if __FILE__ == $PROGRAM_NAME
   read_local = false
@@ -48,7 +90,7 @@ if __FILE__ == $PROGRAM_NAME
   end
   base_url += '/' unless base_url.end_with?('/')
 
-  sorter = Hash.new { |h, k| h[k] = [] }
+  sorter = HolidaySorter.new
   years = []
   pdf_urls.each do |url|
     year = nil
@@ -61,38 +103,24 @@ if __FILE__ == $PROGRAM_NAME
         elsif (x = line.match(/\s*(?<name>.*?)\s+(?<day>\w+\s+\d{1,2}),\s*(?<dow>\w+)/))
           raise "Didn't receive year before seeing a holiday: #{line.strip.inspect} in #{url}" unless year
 
-          date = nil
-          [year, year - 1, year + 1].each do |y|
-            d = Time.parse("#{x['day']}, #{y} 12:00:00 #{utc_offset}")
-            dow = d.localtime.strftime('%A')
-            if dow == x['dow']
-              date = d
-              break
-            end
+          begin
+            sorter.push(year, x['name'], x['day'], x['dow'])
+          rescue HolidaySorterError => e
+            raise "#{e.message}: #{line.strip.inspect} in #{url}"
           end
-          raise "Day of week doesn't match for years around #{year}: #{line.strip.inspect} in #{url}" unless date
-
-          sorter[date] << [x['name'], year]
         end
       end
     end
   end
   years.uniq!
 
-  holidays = []
-  sorter.keys.sort.each do |date|
-    sorter[date].uniq.each do |name, year|
-      holidays << [date, name, year]
-    end
-  end
-
-  holidays.each do |date, name, _year|
+  sorter.holidays.each do |_year, name, date|
     warn "#{date.localtime.strftime('%Y-%m-%d %a')}: #{name}"
   end
-  warn "Found #{holidays.size} holidays over calendar years #{years.join(', ')}."
+  warn "Found #{sorter.holidays.size} holidays over calendar years #{years.join(', ')}."
 
   cal = Icalendar::Calendar.new
-  holidays.each do |date, name, year|
+  sorter.holidays.each do |year, name, date|
     cal.event do |e|
       ymd = date.localtime.strftime('%Y%m%d')
       url = "#{base_url}\##{year}/#{name}"
