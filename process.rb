@@ -16,91 +16,121 @@ require 'pdf-reader'
 require 'time'
 require 'uuidtools'
 
-utc_offset = '-1000'
 VERSION = '1.2'
 
-read_local = false
-opts = OptionParser.new
-opts.banner = <<~_
-  Usage: #{$PROGRAM_NAME} [options] URL
-  Reades holidays listed in PDF files linked from URL.
-_
-opts.on('-l', '--local', 'Reads local PDF files instead of a URL') do
-  read_local = true
-end
-opts.on_tail('--version', 'Show version') do
-  puts VERSION
-  exit
-end
-opts.parse!(ARGV)
+class HolidaySorterError < StandardError; end
 
-if read_local
-  base_url = 'file:/'.dup
-  pdf_urls = ARGV
-else
-  base_url = ARGV.shift.dup
-  pdf_urls = Nokogiri::HTML(URI.parse(base_url).open)
-                     .xpath('//a/@href')
-                     .map(&:value)
-                     .select { |url| url =~ /\.pdf\z/i }
-                     .uniq
+# Vefifies day of week and detects duplications
+class HolidaySorter
+  UTC_OFFSET = '-1000'
+
+  def initialize
+    @sorter = {}
+    @holidays = nil
+  end
+
+  def push(calendar_year, holiday_name, month_day, day_of_week)
+    date = matching_date(calendar_year, month_day, day_of_week)
+    raise HolidaySorterError, "Day of week doesn't match with years around #{calendar_year}" unless date
+
+    k = [calendar_year, holiday_name]
+    if !@sorter[k]
+      @sorter[k] = date
+      @holidays = nil
+    elsif @sorter[k] != date
+      raise HolidaySorterError, "Duplicate #{holiday_name} for #{calendar_year} with inconsistent date"
+    end
+  end
+
+  def holidays
+    @holidays ||= @sorter.to_a.map { |k, date| [*k, date] }
+  end
+
+  def matching_date(calendar_year, month_day, day_of_week)
+    date = nil
+    [calendar_year, calendar_year - 1, calendar_year + 1].each do |y|
+      d = Time.parse("#{month_day}, #{y} 12:00:00 #{UTC_OFFSET}")
+      if day_of_week == d.localtime.strftime('%A')
+        date = d
+        break
+      end
+    end
+    date
+  end
+
+  private :matching_date
 end
-base_url += '/' unless base_url.end_with?('/')
 
-sorter = Hash.new { |h, k| h[k] = [] }
-years = []
-pdf_urls.each do |url|
-  year = nil
-  src = read_local ? url : URI.parse(url).open
-  PDF::Reader.new(src).pages.each do |page|
-    page.text.each_line do |line|
-      if (x = line.match(/\s+(?<year>\d{4,4})\s+HAWAIʻI STATE HOLIDAYS/i))
-        year = Integer(x['year'])
-        years << year
-      elsif (x = line.match(/\s*(?<name>.*?)\s+(?<day>\w+\s+\d{1,2}),\s*(?<dow>\w+)/))
-        raise "Didn't receive year before seeing a holiday: #{line.strip.inspect} in #{url}" unless year
+if __FILE__ == $PROGRAM_NAME
+  read_local = false
+  opts = OptionParser.new
+  opts.banner = <<~_
+    Usage: #{$PROGRAM_NAME} [options] URL
+    Reades holidays listed in PDF files linked from URL.
+  _
+  opts.on('-l', '--local', 'Reads local PDF files instead of a URL') do
+    read_local = true
+  end
+  opts.on_tail('--version', 'Show version') do
+    puts VERSION
+    exit
+  end
+  opts.parse!(ARGV)
 
-        date = nil
-        [year, year - 1, year + 1].each do |y|
-          d = Time.parse("#{x['day']}, #{y} 12:00:00 #{utc_offset}")
-          dow = d.localtime.strftime('%A')
-          if dow == x['dow']
-            date = d
-            break
+  if read_local
+    base_url = 'file:/'.dup
+    pdf_urls = ARGV
+  else
+    base_url = ARGV.shift.dup
+    pdf_urls = Nokogiri::HTML(URI.parse(base_url).open)
+                       .xpath('//a/@href')
+                       .map(&:value)
+                       .select { |url| url =~ /\.pdf\z/i }
+                       .uniq
+  end
+  base_url += '/' unless base_url.end_with?('/')
+
+  sorter = HolidaySorter.new
+  years = []
+  pdf_urls.each do |url|
+    year = nil
+    src = read_local ? url : URI.parse(url).open
+    PDF::Reader.new(src).pages.each do |page|
+      page.text.each_line do |line|
+        if (x = line.match(/\s+(?<year>\d{4,4})\s+HAWAIʻI STATE HOLIDAYS/i))
+          year = Integer(x['year'])
+          years << year
+        elsif (x = line.match(/\s*(?<name>.*?)\s+(?<day>\w+\s+\d{1,2}),\s*(?<dow>\w+)/))
+          raise "Didn't receive year before seeing a holiday: #{line.strip.inspect} in #{url}" unless year
+
+          begin
+            sorter.push(year, x['name'], x['day'], x['dow'])
+          rescue HolidaySorterError => e
+            raise "#{e.message}: #{line.strip.inspect} in #{url}"
           end
         end
-        raise "Day of week doesn't match for years around #{year}: #{line.strip.inspect} in #{url}" unless date
-
-        sorter[date] << [x['name'], year]
       end
     end
   end
-end
-years.uniq!
+  years.uniq!
 
-holidays = []
-sorter.keys.sort.each do |date|
-  sorter[date].uniq.each do |name, year|
-    holidays << [date, name, year]
+  sorter.holidays.each do |_year, name, date|
+    warn "#{date.localtime.strftime('%Y-%m-%d %a')}: #{name}"
   end
-end
+  warn "Found #{sorter.holidays.size} holidays over calendar years #{years.join(', ')}."
 
-holidays.each do |date, name, _year|
-  warn "#{date.localtime.strftime('%Y-%m-%d %a')}: #{name}"
-end
-warn "Found #{holidays.size} holidays over calendar years #{years.join(', ')}."
-
-cal = Icalendar::Calendar.new
-holidays.each do |date, name, year|
-  cal.event do |e|
-    ymd = date.localtime.strftime('%Y%m%d')
-    url = "#{base_url}\##{year}/#{name}"
-    e.uid = UUIDTools::UUID.sha1_create(UUIDTools::UUID_URL_NAMESPACE, url).to_s
-    e.dtstart = Icalendar::Values::Date.new(ymd)
-    e.dtend   = Icalendar::Values::Date.new(ymd)
-    e.summary = name
-    e.transp  = 'TRANSPARENT'
+  cal = Icalendar::Calendar.new
+  sorter.holidays.each do |year, name, date|
+    cal.event do |e|
+      ymd = date.localtime.strftime('%Y%m%d')
+      url = "#{base_url}\##{year}/#{name}"
+      e.uid = UUIDTools::UUID.sha1_create(UUIDTools::UUID_URL_NAMESPACE, url).to_s
+      e.dtstart = Icalendar::Values::Date.new(ymd)
+      e.dtend   = Icalendar::Values::Date.new(ymd)
+      e.summary = name
+      e.transp  = 'TRANSPARENT'
+    end
   end
-end
 
-puts cal.to_ical
+  puts cal.to_ical
+end
